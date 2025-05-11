@@ -1,4 +1,43 @@
-<!DOCTYPE html>
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,61 +45,84 @@
     <title>KOVEROS Durak</title>
     <style>
         body {
-            background-color: #1a1a1a;
-            color: #fff;
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
             margin: 0;
             overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        .background-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -1;
+            display: none;
         }
         .game-container {
-            text-align: center;
-            background-color: #2a2a2a;
-            padding: 10px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
             width: 900px;
             height: 700px;
             position: relative;
+            margin: 0 auto;
             overflow: hidden;
         }
-        .setup-screen {
+        .screen {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.9);
+            background: url('https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80') no-repeat center center fixed;
+            background-size: cover;
+            background-color: rgba(0, 0, 0, 0.7);
+            background-blend-mode: darken;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 10;
-        }
-        .setup-screen h2 {
-            font-size: 20px;
-            margin-bottom: 15px;
-        }
-        .setup-screen select, .setup-screen button {
-            padding: 8px;
-            margin: 5px;
-            border-radius: 5px;
-            background-color: #444;
             color: #fff;
+        }
+        .screen h1 {
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+        .start-screen h1 span {
+            color: #ff0000;
+        }
+        .screen button, .screen input {
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            color: white;
+            padding: 10px 20px;
             border: none;
+            border-radius: 5px;
+            margin: 5px;
+            cursor: pointer;
+            transition: transform 0.1s ease;
             font-size: 14px;
         }
-        .setup-screen button {
-            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
-            cursor: pointer;
-            transition: transform 0.1s ease, background 0.3s ease;
-        }
-        .setup-screen button:hover {
-            background: linear-gradient(45deg, #ff8e53, #ff6b6b);
+        .screen button:hover {
             transform: scale(1.05);
+        }
+        .screen input {
+            background: #444;
+            padding: 8px;
+        }
+        .screen p {
+            font-size: 18px;
+            margin: 10px;
+        }
+        .error-message {
+            color: #ff5555;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+        .back-button {
+            background: linear-gradient(45deg, #6b48ff, #8e53ff);
+            position: absolute;
+            top: 20px;
+            left: 20px;
         }
         .table {
             width: 600px;
@@ -68,118 +130,94 @@
             background: url('https://www.transparenttextures.com/patterns/felt.png'), #2e7d32;
             border-radius: 50%;
             border: 10px solid #4e342e;
-            margin: 10px auto;
+            margin: 0 auto;
             position: relative;
             overflow: hidden;
+            display: none;
         }
         .deck {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 80px;
-            height: 120px;
-            background: url('https://www.transparenttextures.com/patterns/cardboard-flat.png'), repeating-linear-gradient(45deg, #ddd 0px, #ddd 5px, #aaa 5px, #aaa 10px);
+            width: 60px;
+            height: 100px;
+            background: url('https://www.transparenttextures.com/patterns/cardboard-flat.png'), repeating-linear-gradient(45deg, #ddd 0, #ddd 5px, #aaa 5px, #aaa 10px);
             border: 2px solid #000;
-            border-radius: 8px;
+            border-radius: 5px;
         }
         .trump-card {
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, 20px) rotate(-20deg);
+            transform: translate(-50%, -150px) rotate(-20deg);
+            display: none;
         }
         .card {
             position: absolute;
-            width: 70px;
+            width: 60px;
             height: 100px;
-            background-color: #fff;
             border: 2px solid #000;
             border-radius: 5px;
-            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+            box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
             cursor: pointer;
             user-select: none;
-            transition: transform 0.5s ease;
+            transition: transform 0.5s ease, left 1s ease, top 1s ease;
         }
-        .card .value {
-            position: absolute;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .card .value.top-left {
-            top: 5px;
-            left: 5px;
-        }
-        .card .value.bottom-right {
-            bottom: 5px;
-            right: 5px;
-            transform: rotate(180deg);
-        }
-        .card .suit {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 24px;
-        }
-        .hearts, .diamonds {
-            color: #ff0000;
-        }
-        .spades, .clubs {
-            color: #000;
+        .card img {
+            width: 100%;
+            height: 100%;
+            border-radius: 5px;
         }
         .player-hand {
             position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
+            top: 50%;
+            right: -150px;
+            transform: translateY(-50%);
             display: flex;
-            gap: 5px;
+            flex-direction: column;
+            gap: 10px;
             padding: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 5px;
         }
         .player-hand .card {
             transition: transform 0.2s ease;
         }
-        .player-hand .card:nth-child(1) { transform: rotate(-45deg); }
-        .player-hand .card:nth-child(2) { transform: rotate(-35deg); }
-        .player-hand .card:nth-child(3) { transform: rotate(-25deg); }
-        .player-hand .card:nth-child(4) { transform: rotate(-15deg); }
-        .player-hand .card:nth-child(5) { transform: rotate(-5deg); }
-        .player-hand .card:nth-child(6) { transform: rotate(5deg); }
-        .player-hand .card:nth-child(7) { transform: rotate(15deg); }
-        .player-hand .card:nth-child(8) { transform: rotate(25deg); }
         .player-hand .card:hover {
-            transform: translateY(-20px) !important;
+            transform: translateX(-10px);
         }
         .battle-area {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            max-width: 400px;
+            width: 100%;
+            height: 100%;
+        }
+        .battle-card {
+            position: absolute;
+            transform: rotate(15deg);
+        }
+        .defend-card {
+            transform: rotate(-15deg);
         }
         .beat-button, .take-button {
             display: none;
             position: absolute;
-            right: 20px;
+            right: 10px;
             top: 50%;
             transform: translateY(-50%);
             background: linear-gradient(45deg, #ff6b6b, #ff8e53);
             color: white;
-            padding: 10px 20px;
+            padding: 8px 15px;
             border: none;
-            border-radius: 25px;
-            font-size: 14px;
+            border-radius: 5px;
+            font-size: 12px;
             font-weight: bold;
             cursor: pointer;
-            transition: transform 0.1s ease, background 0.3s ease;
+            transition: transform 0.1s ease;
         }
         .take-button {
             background: linear-gradient(45deg, #6b48ff, #8e53ff);
-            left: 20px;
+            left: 10px;
         }
         .beat-button:hover, .take-button:hover {
             transform: scale(1.05);
@@ -189,28 +227,29 @@
         }
         .turn-message {
             position: absolute;
-            top: 10px;
+            top: 5px;
             left: 50%;
             transform: translateX(-50%);
             background-color: rgba(0, 0, 0, 0.7);
-            padding: 5px 15px;
-            border-radius: 10px;
-            font-size: 16px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 14px;
             font-weight: bold;
+            color: #fff;
         }
         .player {
             position: absolute;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 3px;
             background-color: rgba(0, 0, 0, 0.5);
-            padding: 5px;
-            border-radius: 10px;
-            font-size: 12px;
+            padding: 3px;
+            border-radius: 5px;
+            font-size: 10px;
         }
         .player img {
-            width: 30px;
-            height: 30px;
+            width: 25px;
+            height: 25px;
             border-radius: 50%;
             border: 2px solid #fff;
         }
@@ -222,115 +261,254 @@
             gap: 2px;
         }
         .player .cards .card {
-            width: 30px;
-            height: 50px;
+            width: 25px;
+            height: 40px;
             background-color: #444;
             color: #fff;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 12px;
+            font-size: 10px;
+        }
+        .highlight {
+            border: 3px solid #ffd700 !important;
+        }
+        .discard-area {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 200px;
+            height: 100%;
+            overflow: hidden;
         }
     </style>
 </head>
 <body>
+    <video class="background-video" id="background-video" autoplay loop muted>
+        <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
     <div class="game-container">
-        <div class="setup-screen" id="setup-screen">
-            <h2>Налаштування гри</h2>
+        <div class="screen start-screen" id="start-screen">
+            <h1><span>KOVEROS</span> Durak</h1>
+            <button onclick="showCreateGame()">Create Game</button>
+            <button onclick="showJoinGame()">Join Game</button>
+        </div>
+        <div class="screen setup-screen" id="setup-screen" style="display: none;">
+            <button class="back-button" onclick="backToStart()">Back</button>
+            <h2>Game Settings</h2>
             <select id="player-count">
-                <option value="2">2 гравці</option>
-                <option value="3">3 гравці</option>
-                <option value="4">4 гравці</option>
-                <option value="5">5 гравців</option>
-                <option value="6">6 гравців</option>
+                <option value="2">2 Players</option>
+                <option value="3">3 Players</option>
+                <option value="4">4 Players</option>
+                <option value="5">5 Players</option>
+                <option value="6">6 Players</option>
             </select>
             <select id="deck-size">
-                <option value="24">24 карти</option>
-                <option value="36">36 карт</option>
-                <option value="52">52 карти</option>
+                <option value="36">36 Cards</option>
+                <option value="52">52 Cards</option>
             </select>
-            <button onclick="startGame()">Створити гру</button>
+            <label><input type="checkbox" id="transferable"> Transferable</label>
+            <button onclick="createGame()">Create</button>
         </div>
-        <h1 style="font-size: 24px; margin: 5px;">KOVEROS Durak</h1>
-        <div class="turn-message" id="turn-message">Твоя черга нападати</div>
+        <div class="screen join-screen" id="join-screen" style="display: none;">
+            <button class="back-button" onclick="backToStart()">Back</button>
+            <h1>Join Game</h1>
+            <input type="text" id="join-code" placeholder="Enter host code (4 digits)" maxlength="4">
+            <button onclick="joinGame()">Join</button>
+            <p class="error-message" id="error-message">Host code does not exist! Try again</p>
+        </div>
+        <div class="screen waiting-screen" id="waiting-screen" style="display: none;">
+            <button class="back-button" onclick="backToSetup()">Back</button>
+            <h1>Waiting for players...</h1>
+            <p id="host-code"></p>
+            <button onclick="startGame()" id="start-game-button" disabled>Start Game</button>
+        </div>
+        <div class="turn-message" id="turn-message"></div>
         <div class="table" id="table">
-            <div class="deck"></div>
-            <div class="card trump-card" data-value="A" data-suit="spades">
-                <span class="value top-left">A♠</span>
-                <span class="suit spades">♠</span>
-                <span class="value bottom-right">A♠</span>
-            </div>
-            <div class="player-hand" id="player-hand">
-                <div class="card" draggable="true" data-value="7" data-suit="hearts">
-                    <span class="value top-left">7♥</span>
-                    <span class="suit hearts">♥</span>
-                    <span class="value bottom-right">7♥</span>
-                </div>
-                <div class="card" draggable="true" data-value="9" data-suit="spades">
-                    <span class="value top-left">9♠</span>
-                    <span class="suit spades">♠</span>
-                    <span class="value bottom-right">9♠</span>
-                </div>
-                <div class="card" draggable="true" data-value="Q" data-suit="clubs">
-                    <span class="value top-left">Q♣</span>
-                    <span class="suit clubs">♣</span>
-                    <span class="value bottom-right">Q♣</span>
-                </div>
-                <div class="card" draggable="true" data-value="K" data-suit="diamonds">
-                    <span class="value top-left">K♦</span>
-                    <span class="suit diamonds">♦</span>
-                    <span class="value bottom-right">K♦</span>
-                </div>
-                <div class="card" draggable="true" data-value="A" data-suit="hearts">
-                    <span class="value top-left">A♥</span>
-                    <span class="suit hearts">♥</span>
-                    <span class="value bottom-right">A♥</span>
-                </div>
-            </div>
+            <div class="deck" id="deck"></div>
+            <div class="card trump-card" id="trump-card"></div>
+            <div class="player-hand" id="player-hand"></div>
             <div class="battle-area" id="battle-area"></div>
-            <button class="beat-button" id="beat-button" onclick="beatCards()">Бито</button>
-            <button class="take-button" id="take-button" onclick="takeCards()">Взять</button>
+            <button class="beat-button" id="beat-button" onclick="beatCards()">Beat</button>
+            <button class="take-button" id="take-button" onclick="takeCards()">Take</button>
+            <div class="discard-area" id="discard-area"></div>
         </div>
     </div>
 
     <script>
+        const screens = {
+            start: document.getElementById('start-screen'),
+            setup: document.getElementById('setup-screen'),
+            join: document.getElementById('join-screen'),
+            waiting: document.getElementById('waiting-screen')
+        };
         const table = document.getElementById('table');
+        const deck = document.getElementById('deck');
+        const trumpCard = document.getElementById('trump-card');
+        const playerHand = document.getElementById('player-hand');
         const battleArea = document.getElementById('battle-area');
         const beatButton = document.getElementById('beat-button');
         const takeButton = document.getElementById('take-button');
         const turnMessage = document.getElementById('turn-message');
-        const setupScreen = document.getElementById('setup-screen');
+        const backgroundVideo = document.getElementById('background-video');
+        const errorMessage = document.getElementById('error-message');
+        const discardArea = document.getElementById('discard-area');
         let draggedCard = null;
         let currentPlayerIndex = 0;
         let players = [];
+        let deckCards = [];
+        let trumpSuit = '';
         let attackCards = [];
         let defendCards = [];
+        let hostCode = '';
+        let playerId = 0;
 
-        // Позиції гравців навколо столу
-        const positions = [
-            { top: '90%', left: '50%' },  // Гравець 0 (ти, знизу)
-            { top: '50%', left: '90%' },  // Гравець 1 (справа)
-            { top: '10%', left: '75%' },  // Гравець 2 (справа зверху)
-            { top: '10%', left: '25%' },  // Гравець 3 (зліва зверху)
-            { top: '50%', left: '10%' },  // Гравець 4 (зліва)
-            { top: '75%', left: '25%' }   // Гравець 5 (зліва знизу)
-        ];
+        function adjustPlayerPositions() {
+            if (players.length === 2) {
+                return [
+                    { top: '90%', left: '50%' },
+                    { top: '10%', left: '50%' }
+                ];
+            } else if (players.length === 3) {
+                return [
+                    { top: '90%', left: '50%' },
+                    { top: '50%', left: '90%' },
+                    { top: '10%', left: '50%' }
+                ];
+            }
+            return [
+                { top: '90%', left: '50%' },
+                { top: '10%', left: '75%' },
+                { top: '10%', left: '25%' },
+                { top: '50%', left: '10%' },
+                { top: '75%', left: '25%' }
+            ];
+        }
 
-        function startGame() {
+        function showScreen(screen) {
+            Object.values(screens).forEach(s => s.style.display = 'none');
+            if (screen && screens[screen]) {
+                screens[screen].style.display = 'flex';
+            }
+        }
+
+        function showCreateGame() {
+            showScreen('setup');
+        }
+
+        function showJoinGame() {
+            showScreen('join');
+            errorMessage.style.display = 'none';
+        }
+
+        function backToStart() {
+            showScreen('start');
+        }
+
+        function backToSetup() {
+            showScreen('setup');
+        }
+
+        function joinGame() {
+            const inputCode = document.getElementById('join-code').value;
+            if (inputCode === hostCode && hostCode !== '') {
+                errorMessage.style.display = 'none';
+                showScreen('waiting');
+                players.push({
+                    id: players.length,
+                    nickname: `Player${players.length + 1}`,
+                    avatar: `https://cdn.discordapp.com/embed/avatars/${players.length}.png`,
+                    hand: []
+                });
+                playerId = players.length - 1;
+                if (players.length >= 2) {
+                    document.getElementById('start-game-button').disabled = false;
+                }
+            } else {
+                errorMessage.style.display = 'block';
+            }
+        }
+
+        function createGame() {
             const playerCount = parseInt(document.getElementById('player-count').value);
             const deckSize = parseInt(document.getElementById('deck-size').value);
+            const transferable = document.getElementById('transferable').checked;
+
+            hostCode = Math.floor(1000 + Math.random() * 9000).toString();
+            document.getElementById('host-code').textContent = `Host code: ${hostCode}`;
+
+            showScreen('waiting');
 
             players = [];
-            for (let i = 0; i < playerCount; i++) {
-                players.push({
-                    id: i,
-                    nickname: `Player${i + 1}`,
-                    avatar: `https://cdn.discordapp.com/embed/avatars/${i}.png`,
-                    cards: deckSize / playerCount
-                });
+            players.push({
+                id: 0,
+                nickname: `Player1`,
+                avatar: `https://cdn.discordapp.com/embed/avatars/0.png`,
+                hand: []
+            });
+            playerId = 0;
+            for (let i = 1; i < playerCount; i++) {
+                setTimeout(() => {
+                    players.push({
+                        id: i,
+                        nickname: `Player${i + 1}`,
+                        avatar: `https://cdn.discordapp.com/embed/avatars/${i}.png`,
+                        hand: []
+                    });
+                    if (players.length >= 2) {
+                        document.getElementById('start-game-button').disabled = false;
+                    }
+                }, i * 1000);
             }
+        }
 
+        function startGame() {
+            const deckSize = parseInt(document.getElementById('deck-size').value);
+            const suits = ['hearts', 'spades', 'clubs', 'diamonds'];
+            const values = deckSize === 36 ? ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] : ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+            deckCards = [];
+            for (let suit of suits) {
+                for (let value of values) {
+                    deckCards.push({ value, suit });
+                }
+            }
+            deckCards.sort(() => Math.random() - 0.5);
+            trumpSuit = deckCards[deckCards.length - 1].suit;
+
+            showScreen(null);
+            table.style.display = 'block';
+            backgroundVideo.style.display = 'block';
+            dealCardsWithAnimation();
+            determineFirstPlayer();
+        }
+
+        function dealCardsWithAnimation() {
+            const positions = adjustPlayerPositions();
             players.forEach((player, index) => {
+                for (let i = 0; i < 6; i++) {
+                    if (deckCards.length > 0) {
+                        const card = deckCards.pop();
+                        player.hand.push(card);
+                        if (player.id === playerId) {
+                            const cardDiv = document.createElement('div');
+                            cardDiv.className = `card`;
+                            cardDiv.draggable = true;
+                            cardDiv.setAttribute('data-value', card.value);
+                            cardDiv.setAttribute('data-suit', card.suit);
+                            cardDiv.innerHTML = `<img src="https://raw.githubusercontent.com/hayeah/playing-cards-assets/master/png/${card.value}_of_${card.suit}.png" alt="${card.value} of ${card.suit}">`;
+                            playerHand.appendChild(cardDiv);
+                            cardDiv.style.left = '50%';
+                            cardDiv.style.top = '50%';
+                            cardDiv.style.transform = 'translate(-50%, -50%)';
+                            setTimeout(() => {
+                                cardDiv.style.transition = 'left 0.5s ease, top 0.5s ease';
+                                cardDiv.style.left = '0';
+                                cardDiv.style.top = `${(playerHand.children.length - 1) * 110}px`;
+                            }, i * 200);
+                        }
+                    }
+                }
                 const playerDiv = document.createElement('div');
                 playerDiv.className = 'player';
                 playerDiv.style.top = positions[index].top;
@@ -339,98 +517,194 @@
                     <img src="${player.avatar}" alt="${player.nickname}">
                     <span class="nickname">${player.nickname}</span>
                     <div class="cards">
-                        ${'<div class="card">?</div>'.repeat(player.cards)}
+                        ${'<div class="card">?</div>'.repeat(player.hand.length)}
                     </div>
                 `;
                 document.querySelector('.game-container').appendChild(playerDiv);
             });
 
-            setupScreen.style.display = 'none';
-            turnMessage.textContent = `${players[currentPlayerIndex].nickname}, твоя черга нападати`;
+            trumpCard.innerHTML = `<img src="https://raw.githubusercontent.com/hayeah/playing-cards-assets/master/png/${deckCards[deckCards.length - 1].value}_of_${trumpSuit}.png" alt="Trump Card">`;
+            trumpCard.style.display = 'block';
         }
 
-        document.querySelectorAll('.card[draggable="true"]').forEach(card => {
-            card.addEventListener('dragstart', (e) => {
-                draggedCard = card;
-                setTimeout(() => card.style.display = 'none', 0);
-            });
-
-            card.addEventListener('dragend', (e) => {
-                draggedCard.style.display = 'block';
-                draggedCard = null;
-            });
-        });
-
-        table.addEventListener('dragover', (e) => {
-            e.preventDefault();
-        });
-
-        table.addEventListener('drop', (e) => {
-            e.preventDefault();
-            if (draggedCard) {
-                const value = draggedCard.getAttribute('data-value');
-                const suit = draggedCard.getAttribute('data-suit');
-                const newCard = document.createElement('div');
-                newCard.className = `card ${suit}`;
-                newCard.innerHTML = `
-                    <span class="value top-left">${value}${suit === 'hearts' ? '♥' : suit === 'spades' ? '♠' : suit === 'clubs' ? '♣' : '♦'}</span>
-                    <span class="suit ${suit}">${suit === 'hearts' ? '♥' : suit === 'spades' ? '♠' : suit === 'clubs' ? '♣' : '♦'}</span>
-                    <span class="value bottom-right">${value}${suit === 'hearts' ? '♥' : suit === 'spades' ? '♠' : suit === 'clubs' ? '♣' : '♦'}</span>
-                `;
-                newCard.style.position = 'absolute';
-                newCard.style.left = `${battleArea.children.length * 80}px`;
-                newCard.style.top = '0px';
-                battleArea.appendChild(newCard);
-
-                newCard.style.transition = 'transform 0.5s ease';
-                newCard.style.transform = 'translateY(-50px)';
-
-                if (attackCards.length < defendCards.length + 6 && currentPlayerIndex === 0) {
-                    attackCards.push({ value, suit });
-                    turnMessage.textContent = `${players[1].nickname}, твоя черга відбиватися`;
-                } else if (currentPlayerIndex === 1) {
-                    defendCards.push({ value, suit });
-                    if (canBeat(attackCards[defendCards.length - 1].value, attackCards[defendCards.length - 1].suit, value, suit)) {
-                        beatButton.style.display = 'block';
+        function determineFirstPlayer() {
+            let lowestTrump = null;
+            let firstPlayerIndex = 0;
+            players.forEach((player, index) => {
+                player.hand.forEach(card => {
+                    if (card.suit === trumpSuit) {
+                        const valueIndex = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'].indexOf(card.value);
+                        if (!lowestTrump || valueIndex < lowestTrump.valueIndex) {
+                            lowestTrump = { valueIndex, playerIndex: index };
+                        }
                     }
-                    takeButton.style.display = 'block';
-                    turnMessage.textContent = `Гравець ${players[0].nickname}, обери "Бито" або "Взять"`;
+                });
+            });
+            currentPlayerIndex = lowestTrump ? lowestTrump.playerIndex : 0;
+            turnMessage.textContent = `${players[currentPlayerIndex].nickname}, your turn to attack`;
+            if (playerId === currentPlayerIndex) {
+                setupDragEvents();
+            }
+        }
+
+        function drawCards() {
+            players.forEach(player => {
+                while (player.hand.length < 6 && deckCards.length > 0) {
+                    const card = deckCards.pop();
+                    player.hand.push(card);
+                    if (player.id === playerId) {
+                        const cardDiv = document.createElement('div');
+                        cardDiv.className = `card`;
+                        cardDiv.draggable = true;
+                        cardDiv.setAttribute('data-value', card.value);
+                        cardDiv.setAttribute('data-suit', card.suit);
+                        cardDiv.innerHTML = `<img src="https://raw.githubusercontent.com/hayeah/playing-cards-assets/master/png/${card.value}_of_${card.suit}.png" alt="${card.value} of ${card.suit}">`;
+                        playerHand.appendChild(cardDiv);
+                        cardDiv.style.transition = 'left 0.5s ease, top 0.5s ease';
+                        cardDiv.style.left = '50%';
+                        cardDiv.style.top = '50%';
+                        setTimeout(() => {
+                            cardDiv.style.left = '0';
+                            cardDiv.style.top = `${(playerHand.children.length - 1) * 110}px`;
+                        }, 100);
+                    }
+                }
+            });
+        }
+
+        function setupDragEvents() {
+            document.querySelectorAll('.card[draggable="true"]').forEach(card => {
+                card.addEventListener('dragstart', (e) => {
+                    draggedCard = card;
+                    setTimeout(() => card.style.display = 'none', 0);
+                    highlightPossibleTargets(card);
+                });
+
+                card.addEventListener('dragend', (e) => {
+                    draggedCard.style.display = 'block';
+                    draggedCard = null;
+                    document.querySelectorAll('.highlight').forEach(c => c.classList.remove('highlight'));
+                });
+            });
+
+            table.addEventListener('dragover', (e) => e.preventDefault());
+            table.addEventListener('drop', (e) => {
+                e.preventDefault();
+                if (draggedCard) {
+                    const value = draggedCard.getAttribute('data-value');
+                    const suit = draggedCard.getAttribute('data-suit');
+                    const defenderIndex = (currentPlayerIndex + 1) % players.length;
+                    const newCard = document.createElement('div');
+                    newCard.className = `card battle-card`;
+                    newCard.innerHTML = `<img src="https://raw.githubusercontent.com/hayeah/playing-cards-assets/master/png/${value}_of_${suit}.png" alt="${value} of ${suit}">`;
+                    const positions = adjustPlayerPositions();
+                    newCard.style.top = positions[defenderIndex].top;
+                    newCard.style.left = positions[defenderIndex].left;
+                    battleArea.appendChild(newCard);
+                    newCard.style.transition = 'transform 0.5s ease';
+                    newCard.style.transform = 'rotate(15deg)';
+                    attackCards.push({ value, suit, element: newCard, target: defenderIndex });
+
+                    if (currentPlayerIndex === playerId) {
+                        draggedCard.remove();
+                        turnMessage.textContent = `${players[defenderIndex].nickname}, your turn to defend`;
+                        currentPlayerIndex = defenderIndex;
+                        simulateDefenderTurn();
+                    }
+                }
+            });
+        }
+
+        function highlightPossibleTargets(card) {
+            const value = card.getAttribute('data-value');
+            const suit = card.getAttribute('data-suit');
+            if (attackCards.length > 0 && currentPlayerIndex === playerId) {
+                attackCards.forEach(attack => {
+                    if (attackCards.some(c => c.value === value) || defendCards.some(c => c.value === value)) {
+                        attack.element.classList.add('highlight');
+                    }
+                });
+            } else if (currentPlayerIndex === playerId) {
+                const lastAttack = attackCards[attackCards.length - 1];
+                if (canBeat(lastAttack.value, lastAttack.suit, value, suit)) {
+                    lastAttack.element.classList.add('highlight');
                 }
             }
-        });
+        }
 
         function canBeat(attackValue, attackSuit, defendValue, defendSuit) {
             const values = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
             const attackIndex = values.indexOf(attackValue);
             const defendIndex = values.indexOf(defendValue);
-            const trumpSuit = 'spades';
-
             if (defendSuit === trumpSuit && attackSuit !== trumpSuit) return true;
             if (defendSuit === attackSuit) return defendIndex > attackIndex;
             return false;
         }
 
+        function simulateDefenderTurn() {
+            const lastAttack = attackCards[attackCards.length - 1];
+            const defender = players[currentPlayerIndex];
+            const cardToPlay = defender.hand.find(card => canBeat(lastAttack.value, lastAttack.suit, card.value, card.suit));
+            if (cardToPlay) {
+                setTimeout(() => {
+                    const newCard = document.createElement('div');
+                    newCard.className = `card defend-card`;
+                    newCard.innerHTML = `<img src="https://raw.githubusercontent.com/hayeah/playing-cards-assets/master/png/${cardToPlay.value}_of_${cardToPlay.suit}.png" alt="${cardToPlay.value} of ${cardToPlay.suit}">`;
+                    const positions = adjustPlayerPositions();
+                    newCard.style.top = positions[currentPlayerIndex].top;
+                    newCard.style.left = positions[currentPlayerIndex].left;
+                    newCard.style.transform = 'rotate(-15deg)';
+                    battleArea.appendChild(newCard);
+                    defendCards.push({ value: cardToPlay.value, suit: cardToPlay.suit, element: newCard });
+                    defender.hand = defender.hand.filter(c => c !== cardToPlay);
+                    beatButton.style.display = 'block';
+                    takeButton.style.display = 'block';
+                    turnMessage.textContent = `Player ${players[0].nickname}, choose "Beat" or "Take"`;
+                }, 1000);
+            } else {
+                takeButton.style.display = 'block';
+                turnMessage.textContent = `${players[currentPlayerIndex].nickname} cannot defend!`;
+            }
+        }
+
         function beatCards() {
+            attackCards.forEach(card => {
+                card.element.style.transition = 'left 1s ease, top 1s ease';
+                card.element.style.left = '1000px';
+                card.element.style.top = '1000px';
+                setTimeout(() => card.element.remove(), 1000);
+            });
+            defendCards.forEach(card => {
+                card.element.style.transition = 'left 1s ease, top 1s ease';
+                card.element.style.left = '1000px';
+                card.element.style.top = '1000px';
+                setTimeout(() => card.element.remove(), 1000);
+            });
             attackCards = [];
             defendCards = [];
-            battleArea.innerHTML = '';
             beatButton.style.display = 'none';
             takeButton.style.display = 'none';
+            drawCards();
             currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
-            if (currentPlayerIndex === 0) {
-                turnMessage.textContent = `${players[currentPlayerIndex].nickname}, твоя черга нападати`;
-            } else {
-                turnMessage.textContent = `${players[currentPlayerIndex].nickname}, твоя черга відбиватися`;
+            turnMessage.textContent = `${players[currentPlayerIndex].nickname}, your turn to attack`;
+            if (playerId === currentPlayerIndex) {
+                setupDragEvents();
             }
         }
 
         function takeCards() {
+            const defender = players[currentPlayerIndex];
+            attackCards.forEach(card => defender.hand.push({ value: card.value, suit: card.suit }));
             attackCards = [];
             defendCards = [];
             battleArea.innerHTML = '';
             beatButton.style.display = 'none';
             takeButton.style.display = 'none';
-            turnMessage.textContent = `${players[currentPlayerIndex].nickname}, твоя черга відбиватися`;
+            drawCards();
+            turnMessage.textContent = `${players[currentPlayerIndex].nickname}, your turn to attack`;
+            if (playerId === currentPlayerIndex) {
+                setupDragEvents();
+            }
         }
     </script>
 </body>

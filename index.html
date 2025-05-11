@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -58,12 +19,13 @@
         .game-container {
             text-align: center;
             background-color: #2a2a2a;
-            padding: 20px;
+            padding: 10px;
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-            width: 1000px;
-            height: 800px;
+            width: 900px;
+            height: 700px;
             position: relative;
+            overflow: hidden;
         }
         .setup-screen {
             position: absolute;
@@ -79,26 +41,20 @@
             z-index: 10;
         }
         .setup-screen h2 {
-            font-size: 24px;
-            margin-bottom: 20px;
+            font-size: 20px;
+            margin-bottom: 15px;
         }
-        .setup-screen select {
-            padding: 10px;
-            margin: 10px;
+        .setup-screen select, .setup-screen button {
+            padding: 8px;
+            margin: 5px;
             border-radius: 5px;
             background-color: #444;
             color: #fff;
             border: none;
-            font-size: 16px;
+            font-size: 14px;
         }
         .setup-screen button {
             background: linear-gradient(45deg, #ff6b6b, #ff8e53);
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: bold;
             cursor: pointer;
             transition: transform 0.1s ease, background 0.3s ease;
         }
@@ -108,16 +64,13 @@
         }
         .table {
             width: 600px;
-            height: 600px;
-            background: url('https://www.transparenttextures.com/patterns/wood-pattern.png'), #4CAF50;
-            background-blend-mode: overlay;
+            height: 500px;
+            background: url('https://www.transparenttextures.com/patterns/felt.png'), #2e7d32;
             border-radius: 50%;
-            border: 10px solid #3e2a1d;
-            margin: 20px auto;
+            border: 10px solid #4e342e;
+            margin: 10px auto;
             position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            overflow: hidden;
         }
         .deck {
             position: absolute;
@@ -134,15 +87,15 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, 10px) rotate(-20deg);
+            transform: translate(-50%, 20px) rotate(-20deg);
         }
         .card {
             position: absolute;
-            width: 80px;
-            height: 120px;
+            width: 70px;
+            height: 100px;
             background-color: #fff;
             border: 2px solid #000;
-            border-radius: 8px;
+            border-radius: 5px;
             box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
             cursor: pointer;
             user-select: none;
@@ -150,7 +103,7 @@
         }
         .card .value {
             position: absolute;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
         }
         .card .value.top-left {
@@ -167,7 +120,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 30px;
+            font-size: 24px;
         }
         .hearts, .diamonds {
             color: #ff0000;
@@ -181,19 +134,20 @@
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 0;
+            gap: 5px;
+            padding: 10px;
         }
         .player-hand .card {
             transition: transform 0.2s ease;
         }
-        .player-hand .card:nth-child(1) { transform: rotate(-40deg); margin-right: -10px; }
-        .player-hand .card:nth-child(2) { transform: rotate(-30deg); margin-right: -10px; }
-        .player-hand .card:nth-child(3) { transform: rotate(-20deg); margin-right: -10px; }
-        .player-hand .card:nth-child(4) { transform: rotate(-10deg); margin-right: -10px; }
-        .player-hand .card:nth-child(5) { transform: rotate(0deg); margin-right: -10px; }
-        .player-hand .card:nth-child(6) { transform: rotate(10deg); margin-right: -10px; }
-        .player-hand .card:nth-child(7) { transform: rotate(20deg); margin-right: -10px; }
-        .player-hand .card:nth-child(8) { transform: rotate(30deg); }
+        .player-hand .card:nth-child(1) { transform: rotate(-45deg); }
+        .player-hand .card:nth-child(2) { transform: rotate(-35deg); }
+        .player-hand .card:nth-child(3) { transform: rotate(-25deg); }
+        .player-hand .card:nth-child(4) { transform: rotate(-15deg); }
+        .player-hand .card:nth-child(5) { transform: rotate(-5deg); }
+        .player-hand .card:nth-child(6) { transform: rotate(5deg); }
+        .player-hand .card:nth-child(7) { transform: rotate(15deg); }
+        .player-hand .card:nth-child(8) { transform: rotate(25deg); }
         .player-hand .card:hover {
             transform: translateY(-20px) !important;
         }
@@ -203,9 +157,11 @@
             left: 50%;
             transform: translate(-50%, -50%);
             display: flex;
+            flex-wrap: wrap;
             gap: 20px;
+            max-width: 400px;
         }
-        .beat-button {
+        .beat-button, .take-button {
             display: none;
             position: absolute;
             right: 20px;
@@ -216,63 +172,64 @@
             padding: 10px 20px;
             border: none;
             border-radius: 25px;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: bold;
-            text-transform: uppercase;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             cursor: pointer;
             transition: transform 0.1s ease, background 0.3s ease;
         }
-        .beat-button:hover {
-            background: linear-gradient(45deg, #ff8e53, #ff6b6b);
+        .take-button {
+            background: linear-gradient(45deg, #6b48ff, #8e53ff);
+            left: 20px;
+        }
+        .beat-button:hover, .take-button:hover {
             transform: scale(1.05);
         }
-        .beat-button:active {
+        .beat-button:active, .take-button:active {
             transform: scale(0.95);
         }
         .turn-message {
             position: absolute;
-            top: 20px;
+            top: 10px;
             left: 50%;
             transform: translateX(-50%);
             background-color: rgba(0, 0, 0, 0.7);
-            padding: 10px 20px;
+            padding: 5px 15px;
             border-radius: 10px;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
         }
         .player {
             position: absolute;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 5px;
             background-color: rgba(0, 0, 0, 0.5);
-            padding: 5px 10px;
+            padding: 5px;
             border-radius: 10px;
+            font-size: 12px;
         }
         .player img {
-            width: 40px;
-            height: 40px;
+            width: 30px;
+            height: 30px;
             border-radius: 50%;
             border: 2px solid #fff;
         }
         .player .nickname {
-            font-size: 14px;
             font-weight: bold;
         }
         .player .cards {
             display: flex;
-            gap: 5px;
+            gap: 2px;
         }
         .player .cards .card {
-            width: 40px;
-            height: 60px;
+            width: 30px;
+            height: 50px;
             background-color: #444;
             color: #fff;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 16px;
+            font-size: 12px;
         }
     </style>
 </head>
@@ -294,7 +251,7 @@
             </select>
             <button onclick="startGame()">Створити гру</button>
         </div>
-        <h1>KOVEROS Durak</h1>
+        <h1 style="font-size: 24px; margin: 5px;">KOVEROS Durak</h1>
         <div class="turn-message" id="turn-message">Твоя черга нападати</div>
         <div class="table" id="table">
             <div class="deck"></div>
@@ -324,9 +281,15 @@
                     <span class="suit diamonds">♦</span>
                     <span class="value bottom-right">K♦</span>
                 </div>
+                <div class="card" draggable="true" data-value="A" data-suit="hearts">
+                    <span class="value top-left">A♥</span>
+                    <span class="suit hearts">♥</span>
+                    <span class="value bottom-right">A♥</span>
+                </div>
             </div>
             <div class="battle-area" id="battle-area"></div>
             <button class="beat-button" id="beat-button" onclick="beatCards()">Бито</button>
+            <button class="take-button" id="take-button" onclick="takeCards()">Взять</button>
         </div>
     </div>
 
@@ -334,19 +297,22 @@
         const table = document.getElementById('table');
         const battleArea = document.getElementById('battle-area');
         const beatButton = document.getElementById('beat-button');
+        const takeButton = document.getElementById('take-button');
         const turnMessage = document.getElementById('turn-message');
         const setupScreen = document.getElementById('setup-screen');
         let draggedCard = null;
         let currentPlayerIndex = 0;
         let players = [];
+        let attackCards = [];
+        let defendCards = [];
 
         // Позиції гравців навколо столу
         const positions = [
-            { top: '95%', left: '50%' },  // Гравець 0 (ти, знизу)
-            { top: '50%', left: '95%' },  // Гравець 1 (справа)
-            { top: '5%', left: '75%' },   // Гравець 2 (справа зверху)
-            { top: '5%', left: '25%' },   // Гравець 3 (зліва зверху)
-            { top: '50%', left: '5%' },   // Гравець 4 (зліва)
+            { top: '90%', left: '50%' },  // Гравець 0 (ти, знизу)
+            { top: '50%', left: '90%' },  // Гравець 1 (справа)
+            { top: '10%', left: '75%' },  // Гравець 2 (справа зверху)
+            { top: '10%', left: '25%' },  // Гравець 3 (зліва зверху)
+            { top: '50%', left: '10%' },  // Гравець 4 (зліва)
             { top: '75%', left: '25%' }   // Гравець 5 (зліва знизу)
         ];
 
@@ -354,7 +320,6 @@
             const playerCount = parseInt(document.getElementById('player-count').value);
             const deckSize = parseInt(document.getElementById('deck-size').value);
 
-            // Імітація гравців
             players = [];
             for (let i = 0; i < playerCount; i++) {
                 players.push({
@@ -365,7 +330,6 @@
                 });
             }
 
-            // Відображення гравців
             players.forEach((player, index) => {
                 const playerDiv = document.createElement('div');
                 playerDiv.className = 'player';
@@ -385,7 +349,6 @@
             turnMessage.textContent = `${players[currentPlayerIndex].nickname}, твоя черга нападати`;
         }
 
-        // Drag-and-drop логіка
         document.querySelectorAll('.card[draggable="true"]').forEach(card => {
             card.addEventListener('dragstart', (e) => {
                 draggedCard = card;
@@ -414,62 +377,60 @@
                     <span class="suit ${suit}">${suit === 'hearts' ? '♥' : suit === 'spades' ? '♠' : suit === 'clubs' ? '♣' : '♦'}</span>
                     <span class="value bottom-right">${value}${suit === 'hearts' ? '♥' : suit === 'spades' ? '♠' : suit === 'clubs' ? '♣' : '♦'}</span>
                 `;
-                newCard.style.left = '0px'; // Карта гравця
+                newCard.style.position = 'absolute';
+                newCard.style.left = `${battleArea.children.length * 80}px`;
+                newCard.style.top = '0px';
                 battleArea.appendChild(newCard);
 
-                // Анімація кидання карти
                 newCard.style.transition = 'transform 0.5s ease';
-                newCard.style.transform = 'translate(50px, -50px)';
+                newCard.style.transform = 'translateY(-50px)';
 
-                // Визначити, на кого ходить гравець
-                const defenderIndex = (currentPlayerIndex + 1) % players.length;
-                turnMessage.textContent = `${players[defenderIndex].nickname}, твоя черга відбиватися`;
-
-                // Імітація ходу суперника
-                setTimeout(() => {
-                    const opponentCard = document.createElement('div');
-                    opponentCard.className = `card spades`;
-                    opponentCard.innerHTML = `
-                        <span class="value top-left">10♠</span>
-                        <span class="suit spades">♠</span>
-                        <span class="value bottom-right">10♠</span>
-                    `;
-                    opponentCard.style.left = '100px'; // Карта суперника
-                    battleArea.appendChild(opponentCard);
-
-                    // Анімація кидання карти суперника
-                    opponentCard.style.transition = 'transform 0.5s ease';
-                    opponentCard.style.transform = `translate(-50px, 50px)`;
-
-                    // Показати кнопку "Бито", якщо карта побита
-                    if (canBeat(value, suit, '10', 'spades')) {
+                if (attackCards.length < defendCards.length + 6 && currentPlayerIndex === 0) {
+                    attackCards.push({ value, suit });
+                    turnMessage.textContent = `${players[1].nickname}, твоя черга відбиватися`;
+                } else if (currentPlayerIndex === 1) {
+                    defendCards.push({ value, suit });
+                    if (canBeat(attackCards[defendCards.length - 1].value, attackCards[defendCards.length - 1].suit, value, suit)) {
                         beatButton.style.display = 'block';
                     }
-                }, 1000);
+                    takeButton.style.display = 'block';
+                    turnMessage.textContent = `Гравець ${players[0].nickname}, обери "Бито" або "Взять"`;
+                }
             }
         });
 
-        function canBeat(playerValue, playerSuit, opponentValue, opponentSuit) {
+        function canBeat(attackValue, attackSuit, defendValue, defendSuit) {
             const values = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-            const playerIndex = values.indexOf(playerValue);
-            const opponentIndex = values.indexOf(opponentValue);
+            const attackIndex = values.indexOf(attackValue);
+            const defendIndex = values.indexOf(defendValue);
             const trumpSuit = 'spades';
 
-            if (playerSuit === opponentSuit) {
-                return playerIndex > opponentIndex;
-            }
-            if (playerSuit === trumpSuit) {
-                return true;
-            }
+            if (defendSuit === trumpSuit && attackSuit !== trumpSuit) return true;
+            if (defendSuit === attackSuit) return defendIndex > attackIndex;
             return false;
         }
 
         function beatCards() {
+            attackCards = [];
+            defendCards = [];
             battleArea.innerHTML = '';
             beatButton.style.display = 'none';
-
+            takeButton.style.display = 'none';
             currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
-            turnMessage.textContent = `${players[currentPlayerIndex].nickname}, твоя черга нападати`;
+            if (currentPlayerIndex === 0) {
+                turnMessage.textContent = `${players[currentPlayerIndex].nickname}, твоя черга нападати`;
+            } else {
+                turnMessage.textContent = `${players[currentPlayerIndex].nickname}, твоя черга відбиватися`;
+            }
+        }
+
+        function takeCards() {
+            attackCards = [];
+            defendCards = [];
+            battleArea.innerHTML = '';
+            beatButton.style.display = 'none';
+            takeButton.style.display = 'none';
+            turnMessage.textContent = `${players[currentPlayerIndex].nickname}, твоя черга відбиватися`;
         }
     </script>
 </body>

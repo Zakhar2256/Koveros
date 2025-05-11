@@ -1,0 +1,476 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOVEROS Durak</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .game-container {
+            text-align: center;
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            width: 1000px;
+            height: 800px;
+            position: relative;
+        }
+        .setup-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        .setup-screen h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .setup-screen select {
+            padding: 10px;
+            margin: 10px;
+            border-radius: 5px;
+            background-color: #444;
+            color: #fff;
+            border: none;
+            font-size: 16px;
+        }
+        .setup-screen button {
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s ease, background 0.3s ease;
+        }
+        .setup-screen button:hover {
+            background: linear-gradient(45deg, #ff8e53, #ff6b6b);
+            transform: scale(1.05);
+        }
+        .table {
+            width: 600px;
+            height: 600px;
+            background: url('https://www.transparenttextures.com/patterns/wood-pattern.png'), #4CAF50;
+            background-blend-mode: overlay;
+            border-radius: 50%;
+            border: 10px solid #3e2a1d;
+            margin: 20px auto;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .deck {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 120px;
+            background: url('https://www.transparenttextures.com/patterns/cardboard-flat.png'), repeating-linear-gradient(45deg, #ddd 0px, #ddd 5px, #aaa 5px, #aaa 10px);
+            border: 2px solid #000;
+            border-radius: 8px;
+        }
+        .trump-card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, 10px) rotate(-20deg);
+        }
+        .card {
+            position: absolute;
+            width: 80px;
+            height: 120px;
+            background-color: #fff;
+            border: 2px solid #000;
+            border-radius: 8px;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.5s ease;
+        }
+        .card .value {
+            position: absolute;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .card .value.top-left {
+            top: 5px;
+            left: 5px;
+        }
+        .card .value.bottom-right {
+            bottom: 5px;
+            right: 5px;
+            transform: rotate(180deg);
+        }
+        .card .suit {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 30px;
+        }
+        .hearts, .diamonds {
+            color: #ff0000;
+        }
+        .spades, .clubs {
+            color: #000;
+        }
+        .player-hand {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 0;
+        }
+        .player-hand .card {
+            transition: transform 0.2s ease;
+        }
+        .player-hand .card:nth-child(1) { transform: rotate(-40deg); margin-right: -10px; }
+        .player-hand .card:nth-child(2) { transform: rotate(-30deg); margin-right: -10px; }
+        .player-hand .card:nth-child(3) { transform: rotate(-20deg); margin-right: -10px; }
+        .player-hand .card:nth-child(4) { transform: rotate(-10deg); margin-right: -10px; }
+        .player-hand .card:nth-child(5) { transform: rotate(0deg); margin-right: -10px; }
+        .player-hand .card:nth-child(6) { transform: rotate(10deg); margin-right: -10px; }
+        .player-hand .card:nth-child(7) { transform: rotate(20deg); margin-right: -10px; }
+        .player-hand .card:nth-child(8) { transform: rotate(30deg); }
+        .player-hand .card:hover {
+            transform: translateY(-20px) !important;
+        }
+        .battle-area {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            gap: 20px;
+        }
+        .beat-button {
+            display: none;
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: transform 0.1s ease, background 0.3s ease;
+        }
+        .beat-button:hover {
+            background: linear-gradient(45deg, #ff8e53, #ff6b6b);
+            transform: scale(1.05);
+        }
+        .beat-button:active {
+            transform: scale(0.95);
+        }
+        .turn-message {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .player {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 10px;
+        }
+        .player img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+        }
+        .player .nickname {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .player .cards {
+            display: flex;
+            gap: 5px;
+        }
+        .player .cards .card {
+            width: 40px;
+            height: 60px;
+            background-color: #444;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="setup-screen" id="setup-screen">
+            <h2>Налаштування гри</h2>
+            <select id="player-count">
+                <option value="2">2 гравці</option>
+                <option value="3">3 гравці</option>
+                <option value="4">4 гравці</option>
+                <option value="5">5 гравців</option>
+                <option value="6">6 гравців</option>
+            </select>
+            <select id="deck-size">
+                <option value="24">24 карти</option>
+                <option value="36">36 карт</option>
+                <option value="52">52 карти</option>
+            </select>
+            <button onclick="startGame()">Створити гру</button>
+        </div>
+        <h1>KOVEROS Durak</h1>
+        <div class="turn-message" id="turn-message">Твоя черга нападати</div>
+        <div class="table" id="table">
+            <div class="deck"></div>
+            <div class="card trump-card" data-value="A" data-suit="spades">
+                <span class="value top-left">A♠</span>
+                <span class="suit spades">♠</span>
+                <span class="value bottom-right">A♠</span>
+            </div>
+            <div class="player-hand" id="player-hand">
+                <div class="card" draggable="true" data-value="7" data-suit="hearts">
+                    <span class="value top-left">7♥</span>
+                    <span class="suit hearts">♥</span>
+                    <span class="value bottom-right">7♥</span>
+                </div>
+                <div class="card" draggable="true" data-value="9" data-suit="spades">
+                    <span class="value top-left">9♠</span>
+                    <span class="suit spades">♠</span>
+                    <span class="value bottom-right">9♠</span>
+                </div>
+                <div class="card" draggable="true" data-value="Q" data-suit="clubs">
+                    <span class="value top-left">Q♣</span>
+                    <span class="suit clubs">♣</span>
+                    <span class="value bottom-right">Q♣</span>
+                </div>
+                <div class="card" draggable="true" data-value="K" data-suit="diamonds">
+                    <span class="value top-left">K♦</span>
+                    <span class="suit diamonds">♦</span>
+                    <span class="value bottom-right">K♦</span>
+                </div>
+            </div>
+            <div class="battle-area" id="battle-area"></div>
+            <button class="beat-button" id="beat-button" onclick="beatCards()">Бито</button>
+        </div>
+    </div>
+
+    <script>
+        const table = document.getElementById('table');
+        const battleArea = document.getElementById('battle-area');
+        const beatButton = document.getElementById('beat-button');
+        const turnMessage = document.getElementById('turn-message');
+        const setupScreen = document.getElementById('setup-screen');
+        let draggedCard = null;
+        let currentPlayerIndex = 0;
+        let players = [];
+
+        // Позиції гравців навколо столу
+        const positions = [
+            { top: '95%', left: '50%' },  // Гравець 0 (ти, знизу)
+            { top: '50%', left: '95%' },  // Гравець 1 (справа)
+            { top: '5%', left: '75%' },   // Гравець 2 (справа зверху)
+            { top: '5%', left: '25%' },   // Гравець 3 (зліва зверху)
+            { top: '50%', left: '5%' },   // Гравець 4 (зліва)
+            { top: '75%', left: '25%' }   // Гравець 5 (зліва знизу)
+        ];
+
+        function startGame() {
+            const playerCount = parseInt(document.getElementById('player-count').value);
+            const deckSize = parseInt(document.getElementById('deck-size').value);
+
+            // Імітація гравців
+            players = [];
+            for (let i = 0; i < playerCount; i++) {
+                players.push({
+                    id: i,
+                    nickname: `Player${i + 1}`,
+                    avatar: `https://cdn.discordapp.com/embed/avatars/${i}.png`,
+                    cards: deckSize / playerCount
+                });
+            }
+
+            // Відображення гравців
+            players.forEach((player, index) => {
+                const playerDiv = document.createElement('div');
+                playerDiv.className = 'player';
+                playerDiv.style.top = positions[index].top;
+                playerDiv.style.left = positions[index].left;
+                playerDiv.innerHTML = `
+                    <img src="${player.avatar}" alt="${player.nickname}">
+                    <span class="nickname">${player.nickname}</span>
+                    <div class="cards">
+                        ${'<div class="card">?</div>'.repeat(player.cards)}
+                    </div>
+                `;
+                document.querySelector('.game-container').appendChild(playerDiv);
+            });
+
+            setupScreen.style.display = 'none';
+            turnMessage.textContent = `${players[currentPlayerIndex].nickname}, твоя черга нападати`;
+        }
+
+        // Drag-and-drop логіка
+        document.querySelectorAll('.card[draggable="true"]').forEach(card => {
+            card.addEventListener('dragstart', (e) => {
+                draggedCard = card;
+                setTimeout(() => card.style.display = 'none', 0);
+            });
+
+            card.addEventListener('dragend', (e) => {
+                draggedCard.style.display = 'block';
+                draggedCard = null;
+            });
+        });
+
+        table.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        table.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (draggedCard) {
+                const value = draggedCard.getAttribute('data-value');
+                const suit = draggedCard.getAttribute('data-suit');
+                const newCard = document.createElement('div');
+                newCard.className = `card ${suit}`;
+                newCard.innerHTML = `
+                    <span class="value top-left">${value}${suit === 'hearts' ? '♥' : suit === 'spades' ? '♠' : suit === 'clubs' ? '♣' : '♦'}</span>
+                    <span class="suit ${suit}">${suit === 'hearts' ? '♥' : suit === 'spades' ? '♠' : suit === 'clubs' ? '♣' : '♦'}</span>
+                    <span class="value bottom-right">${value}${suit === 'hearts' ? '♥' : suit === 'spades' ? '♠' : suit === 'clubs' ? '♣' : '♦'}</span>
+                `;
+                newCard.style.left = '0px'; // Карта гравця
+                battleArea.appendChild(newCard);
+
+                // Анімація кидання карти
+                newCard.style.transition = 'transform 0.5s ease';
+                newCard.style.transform = 'translate(50px, -50px)';
+
+                // Визначити, на кого ходить гравець
+                const defenderIndex = (currentPlayerIndex + 1) % players.length;
+                turnMessage.textContent = `${players[defenderIndex].nickname}, твоя черга відбиватися`;
+
+                // Імітація ходу суперника
+                setTimeout(() => {
+                    const opponentCard = document.createElement('div');
+                    opponentCard.className = `card spades`;
+                    opponentCard.innerHTML = `
+                        <span class="value top-left">10♠</span>
+                        <span class="suit spades">♠</span>
+                        <span class="value bottom-right">10♠</span>
+                    `;
+                    opponentCard.style.left = '100px'; // Карта суперника
+                    battleArea.appendChild(opponentCard);
+
+                    // Анімація кидання карти суперника
+                    opponentCard.style.transition = 'transform 0.5s ease';
+                    opponentCard.style.transform = `translate(-50px, 50px)`;
+
+                    // Показати кнопку "Бито", якщо карта побита
+                    if (canBeat(value, suit, '10', 'spades')) {
+                        beatButton.style.display = 'block';
+                    }
+                }, 1000);
+            }
+        });
+
+        function canBeat(playerValue, playerSuit, opponentValue, opponentSuit) {
+            const values = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+            const playerIndex = values.indexOf(playerValue);
+            const opponentIndex = values.indexOf(opponentValue);
+            const trumpSuit = 'spades';
+
+            if (playerSuit === opponentSuit) {
+                return playerIndex > opponentIndex;
+            }
+            if (playerSuit === trumpSuit) {
+                return true;
+            }
+            return false;
+        }
+
+        function beatCards() {
+            battleArea.innerHTML = '';
+            beatButton.style.display = 'none';
+
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            turnMessage.textContent = `${players[currentPlayerIndex].nickname}, твоя черга нападати`;
+        }
+    </script>
+</body>
+</html>
